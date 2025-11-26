@@ -7,3 +7,4 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 .env
+.cursor/plans/phase-2-data-extraction-1f11aecc.plan.md

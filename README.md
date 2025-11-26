@@ -1,21 +1,43 @@
 # bill_parser
 MVP for a bill parser application with an enriched layer to add value over the extracted data.
 
-## Phase 2: Docling Exploration
-We are currently in a discovery phase to evaluate the capabilities of [Docling](https://github.com/DS4SD/docling) for parsing bill images.
+## Phase 3: Semantic Extraction
+The pipeline now supports semantic data extraction using Docling (for layout/text) and OpenAI (for structured parsing).
+
+### Setup
+1.  **Dependencies**: Ensure all packages are installed.
+    ```bash
+    uv sync
+    ```
+2.  **Environment**:
+    - Copy `.env.example` to `.env`
+    - Add your `OPENAI_API_KEY` to `.env`
 
 ### Usage
-To run the batch processing on the sample dataset:
+Run the pipeline with `main.py`.
 
+**Process fresh images (Docling + LLM):**
 ```bash
-python main.py
+python main.py --limit 3
 ```
 
-This script will:
-1.  Look for `.jpg` files in `data/raw/sample/`
-2.  Convert each image using Docling
-3.  Save the results in `data/processed/docling_output/`:
-    - `*.md`: Markdown representation of the document layout and text
-    - `*.json`: Full structured JSON output
+### Output
+- **Raw Docling**: `data/processed/docling_output/` (*.md, *.json)
+- **Final Structured Data**: `data/processed/structured_output/` (*.json)
+- **Structured Database**: `data/processed/database.csv`
 
-The output of this phase will inform the strategy for structured data extraction (Phase 3).
+## Reporter Layer
+Generate a Markdown report and monthly spend plot from the consolidated database.
+
+### Usage
+After running the main pipeline (to populate `database.csv`), run:
+
+```bash
+python -m src.reporter
+```
+
+This will:
+- Read `data/processed/database.csv`
+- Generate a monthly spend line plot at `reports/monthly_spend.png`
+- Generate a Markdown report at `reports/spending_report.md`
+

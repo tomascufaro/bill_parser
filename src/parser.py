@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any
+import argparse
 from docling.document_converter import DocumentConverter
 
 class BillParser:
@@ -42,3 +43,20 @@ class BillParser:
             dict: Dictionary representation of the document
         """
         return conversion_result.document.export_to_dict()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Test BillParser independently")
+    parser.add_argument("image_path", type=Path, help="Path to image file")
+    args = parser.parse_args()
+    
+    if not args.image_path.exists():
+        print(f"File not found: {args.image_path}")
+        exit(1)
+        
+    bill_parser = BillParser()
+    print(f"Processing {args.image_path}...")
+    result = bill_parser.convert_image(args.image_path)
+    md = bill_parser.export_markdown(result)
+    
+    print("\n--- Markdown Output ---\n")
+    print(md)

@@ -1,58 +1,94 @@
 import json
 import os
+import argparse
 from pathlib import Path
+from dotenv import load_dotenv
+
 from src.parser import BillParser
+from src.extractor import BillExtractor
+from src.csv_exporter import export_to_csv
+
+# Load environment variables
+load_dotenv()
 
 def main():
-    print("Starting Docling exploration phase...")
-    
-    # Define paths
+    parser = argparse.ArgumentParser(description="Bill Parser Pipeline")
+    parser.add_argument("--limit", type=int, default=0, help="Limit files to process")
+    args = parser.parse_args()
+
+    # Paths
     base_dir = Path(__file__).parent
-    input_dir = base_dir / "data/raw/sample"
-    output_dir = base_dir / "data/processed/docling_output"
+    raw_dir = base_dir / "data/raw/sample"
+    # We still use this to store intermediate MD/JSON for debugging/cache
+    # but the pipeline runs start-to-finish.
+    docling_output_dir = base_dir / "data/processed/docling_output"
+    final_output_dir = base_dir / "data/processed/structured_output"
+    database_csv = base_dir / "data/processed/database.csv"
+    model_csv = base_dir / "data/raw/data_model.csv"
     
-    # Create output directory if it doesn't exist
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Initialize parser
-    parser = BillParser()
-    
-    # Get list of jpg files
-    image_files = list(input_dir.glob("*.jpg"))
-    
-    if not image_files:
-        print(f"No .jpg files found in {input_dir}")
+    for d in [docling_output_dir, final_output_dir]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    # Init
+    print("Initializing components...")
+    bill_parser = BillParser()
+    try:
+        extractor = BillExtractor()
+    except ValueError as e:
+        print(f"Configuration Error: {e}")
         return
 
-    print(f"Found {len(image_files)} images to process.")
-    
-    for i, img_path in enumerate(image_files, 1):
-        print(f"[{i}/{len(image_files)}] Processing {img_path.name}...")
+    # Select Input Files (Always from Raw)
+    input_files = list(raw_dir.glob("*.jpg"))
+
+    if not input_files:
+        print("No input files found in data/raw/sample/")
+        return
+
+    # Apply Limit
+    if args.limit > 0:
+        input_files = input_files[:args.limit]
+        print(f"Limit applied: Processing first {args.limit} files.")
+    else:
+        print(f"Found {len(input_files)} files to process.")
+
+    # Process Loop
+    for i, file_path in enumerate(input_files, 1):
+        print(f"[{i}/{len(input_files)}] Processing {file_path.name}...")
         
         try:
-            # Convert
-            result = parser.convert_image(img_path)
+            source_filename = file_path.name
             
-            # Export formats
-            md_content = parser.export_markdown(result)
-            json_content = parser.export_json(result)
+            # 1. Docling (Image -> Markdown)
+            print(f"  -> Running Docling parser...")
+            result = bill_parser.convert_image(file_path)
+            markdown_content = bill_parser.export_markdown(result)
             
-            # Save Markdown
-            md_path = output_dir / f"{img_path.stem}.md"
+            # Save intermediate MD (useful for debugging)
+            md_path = docling_output_dir / f"{file_path.stem}.md"
             with open(md_path, "w", encoding="utf-8") as f:
-                f.write(md_content)
-                
-            # Save JSON
-            json_path = output_dir / f"{img_path.stem}.json"
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(json_content, f, ensure_ascii=False, indent=2)
-                
-            print(f"  Saved outputs to {output_dir}")
+                f.write(markdown_content)
             
-        except Exception as e:
-            print(f"  Error processing {img_path.name}: {str(e)}")
+            # 2. Extract Data (Markdown -> Structured)
+            print(f"  -> Extracting structured data...")
+            bill = extractor.extract_data_from_markdown(markdown_content)
+            bill.source_filename = source_filename
+            
+            # 3. Save Final Result
+            out_path = final_output_dir / f"{file_path.stem}.json"
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(bill.model_dump_json(indent=2))
+            
+            print(f"  -> Saved to {out_path}")
 
-    print("\nBatch processing completed.")
+        except Exception as e:
+            print(f"  ERROR processing {file_path.name}: {str(e)}")
+
+    # 4. Export to CSV
+    print("\nExporting to CSV database...")
+    export_to_csv(final_output_dir, database_csv, model_csv)
+    
+    print("\nPipeline execution completed.")
 
 if __name__ == "__main__":
     main()
